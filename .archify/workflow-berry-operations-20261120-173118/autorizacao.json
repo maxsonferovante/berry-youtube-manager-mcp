@@ -1,0 +1,161 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Berry · Autorização OAuth",
+    "locale": "pt-BR",
+    "quality_profile": "showcase",
+    "output": ".archify/workflow-berry-operations-20261120-173118/autorizacao.html",
+    "repository": {
+      "url": "https://example.invalid/berry-local-evidence.git",
+      "revision": "9f30d4cd559e1f54136a89dbd67debfeec9d6417",
+      "link_mode": "local-only"
+    }
+  },
+  "lanes": [
+    {
+      "id": "principal",
+      "label": "Fluxo principal"
+    }
+  ],
+  "mainPath": [
+    "inicio",
+    "pkce",
+    "google",
+    "callback",
+    "troca",
+    "salvar"
+  ],
+  "nodes": [
+    {
+      "id": "inicio",
+      "lane": "principal",
+      "col": 0,
+      "type": "external",
+      "label": "Autorizar",
+      "sublabel": "comando local",
+      "sources": [
+        {
+          "path": "src/main.rs",
+          "line": 10,
+          "end_line": 14
+        }
+      ]
+    },
+    {
+      "id": "pkce",
+      "lane": "principal",
+      "col": 1,
+      "type": "security",
+      "label": "Criar pedido",
+      "sublabel": "estado e PKCE",
+      "sources": [
+        {
+          "path": "src/infrastructure/oauth.rs",
+          "line": 61,
+          "end_line": 79
+        }
+      ]
+    },
+    {
+      "id": "google",
+      "lane": "principal",
+      "col": 2,
+      "type": "cloud",
+      "label": "Consentimento",
+      "sublabel": "canal no Google",
+      "sources": [
+        {
+          "path": "src/infrastructure/oauth.rs",
+          "line": 69,
+          "end_line": 80
+        }
+      ]
+    },
+    {
+      "id": "callback",
+      "lane": "principal",
+      "col": 3,
+      "type": "backend",
+      "label": "Validar retorno",
+      "sublabel": "127.0.0.1 e estado",
+      "sources": [
+        {
+          "path": "src/infrastructure/oauth.rs",
+          "line": 81,
+          "end_line": 104
+        }
+      ]
+    },
+    {
+      "id": "troca",
+      "lane": "principal",
+      "col": 4,
+      "type": "cloud",
+      "label": "Trocar código",
+      "sublabel": "tokens OAuth",
+      "sources": [
+        {
+          "path": "src/infrastructure/oauth.rs",
+          "line": 107,
+          "end_line": 125
+        }
+      ]
+    },
+    {
+      "id": "salvar",
+      "lane": "principal",
+      "col": 5,
+      "type": "database",
+      "label": "Salvar credencial",
+      "sublabel": "arquivo local",
+      "sources": [
+        {
+          "path": "src/infrastructure/oauth.rs",
+          "line": 122,
+          "end_line": 149
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "inicio",
+      "to": "pkce"
+    },
+    {
+      "from": "pkce",
+      "to": "google"
+    },
+    {
+      "from": "google",
+      "to": "callback"
+    },
+    {
+      "from": "callback",
+      "to": "troca"
+    },
+    {
+      "from": "troca",
+      "to": "salvar"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Permissão",
+      "items": [
+        "youtube.force-ssl é solicitado ao Google",
+        "O agente usa o processo local via stdio"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Próximas chamadas",
+      "items": [
+        "google-cloud-auth obtém token de acesso",
+        "A revogação exige nova autorização"
+      ]
+    }
+  ]
+}

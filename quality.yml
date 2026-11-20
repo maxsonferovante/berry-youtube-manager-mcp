@@ -1,0 +1,12 @@
+tools:
+  - name: Cargo
+    check_command: cargo --version
+hooks:
+  rust:
+    pre-commit:
+      - name: Rust formatting
+        command: cargo fmt --all -- --check
+      - name: Rust tests
+        command: cargo test --locked
+      - name: Rust clippy
+        command: cargo clippy --locked --all-targets -- -D warnings

@@ -1,0 +1,161 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Berry · Envio de vídeo",
+    "locale": "pt-BR",
+    "quality_profile": "showcase",
+    "output": ".archify/workflow-berry-operations-20261120-173118/publicacao.html",
+    "repository": {
+      "url": "https://example.invalid/berry-local-evidence.git",
+      "revision": "9f30d4cd559e1f54136a89dbd67debfeec9d6417",
+      "link_mode": "local-only"
+    }
+  },
+  "lanes": [
+    {
+      "id": "principal",
+      "label": "Fluxo principal"
+    }
+  ],
+  "mainPath": [
+    "agente",
+    "ferramenta",
+    "validar",
+    "credencial",
+    "enviar",
+    "resposta"
+  ],
+  "nodes": [
+    {
+      "id": "agente",
+      "lane": "principal",
+      "col": 0,
+      "type": "external",
+      "label": "Cliente MCP",
+      "sublabel": "envia pedido",
+      "sources": [
+        {
+          "path": "src/main.rs",
+          "line": 15,
+          "end_line": 19
+        }
+      ]
+    },
+    {
+      "id": "ferramenta",
+      "lane": "principal",
+      "col": 1,
+      "type": "backend",
+      "label": "publicar_video",
+      "sublabel": "entrada MCP",
+      "sources": [
+        {
+          "path": "src/presentation/mod.rs",
+          "line": 67,
+          "end_line": 75
+        }
+      ]
+    },
+    {
+      "id": "validar",
+      "lane": "principal",
+      "col": 2,
+      "type": "security",
+      "label": "Validar",
+      "sublabel": "arquivo e privacidade",
+      "sources": [
+        {
+          "path": "src/domain/mod.rs",
+          "line": 56,
+          "end_line": 66
+        }
+      ]
+    },
+    {
+      "id": "credencial",
+      "lane": "principal",
+      "col": 3,
+      "type": "security",
+      "label": "Obter token",
+      "sublabel": "credencial local",
+      "sources": [
+        {
+          "path": "src/infrastructure/oauth.rs",
+          "line": 153,
+          "end_line": 169
+        }
+      ]
+    },
+    {
+      "id": "enviar",
+      "lane": "principal",
+      "col": 4,
+      "type": "cloud",
+      "label": "Upload",
+      "sublabel": "sessão e arquivo",
+      "sources": [
+        {
+          "path": "src/infrastructure/youtube.rs",
+          "line": 291,
+          "end_line": 327
+        }
+      ]
+    },
+    {
+      "id": "resposta",
+      "lane": "principal",
+      "col": 5,
+      "type": "backend",
+      "label": "Retornar",
+      "sublabel": "resultado da API",
+      "sources": [
+        {
+          "path": "src/infrastructure/youtube.rs",
+          "line": 327,
+          "end_line": 333
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "agente",
+      "to": "ferramenta"
+    },
+    {
+      "from": "ferramenta",
+      "to": "validar"
+    },
+    {
+      "from": "validar",
+      "to": "credencial"
+    },
+    {
+      "from": "credencial",
+      "to": "enviar"
+    },
+    {
+      "from": "enviar",
+      "to": "resposta"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Publicação",
+      "items": [
+        "Padrão público; agendado inicia privado",
+        "O YouTube determina a classificação Short"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Verificação",
+      "items": [
+        "Resposta incerta: consulte antes de reenviar",
+        "Vídeo relacionado é uma pendência no Studio"
+      ]
+    }
+  ]
+}
