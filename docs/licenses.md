@@ -16,4 +16,4 @@ Inspect all resolved dependency licenses with `cargo metadata --locked --format-
 
 ## Generated diagrams
 
-The standalone HTML diagrams include Archify's embedded viewer and templates. Archify's Apache-2.0 license, historical MIT license, notice and third-party notices are preserved under [`third_party/archify`](../third_party/archify/). Its embedded JetBrains Mono font is distributed under the SIL Open Font License 1.1; the license is included in each generated HTML. Berry's authored diagram content remains part of this project.
+The standalone HTML diagrams include Archify's embedded viewer and templates. Archify's Apache-2.0 license, historical MIT license, notice and third-party notices are preserved under [`third_party/archify`](../third_party/archify/). The standalone animated SVG exports in [`docs/diagrams`](diagrams/) retain the Archify diagram styling and embedded JetBrains Mono font, distributed under the SIL Open Font License 1.1; its license text is embedded in each SVG and included in each generated HTML. Berry's authored diagram content remains part of this project.

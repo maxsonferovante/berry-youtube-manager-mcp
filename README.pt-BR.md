@@ -8,10 +8,19 @@ O Berry consulta canais e vídeos, envia vídeos e Shorts, agenda vídeos, decla
 
 ## Diagramas de operação
 
-- [Autorização OAuth](.archify/workflow-berry-operations-20261120-173118/autorizacao.html)
-- [Publicação de vídeo](.archify/workflow-berry-operations-20261120-173118/publicacao.html)
+### Autorização OAuth
 
-Abra os arquivos HTML localmente após clonar. Os diagramas estão em português; os controles do visualizador estão em inglês.
+![Diagrama animado do Archify para autorização OAuth do Berry](docs/diagrams/autorizacao.svg)
+
+[Abrir o visualizador interativo do Archify](.archify/workflow-berry-operations-20261120-173118/autorizacao.html)
+
+### Publicação de vídeo
+
+![Diagrama animado do Archify para publicação de vídeo](docs/diagrams/publicacao.svg)
+
+[Abrir o visualizador interativo do Archify](.archify/workflow-berry-operations-20261120-173118/publicacao.html)
+
+Os SVGs são exportações animadas e independentes dos diagramas feitos no Archify. O GitHub pode exibi-los como imagens estáticas; abra o visualizador HTML indicado para ver a versão interativa. Os diagramas estão em português.
 
 ## Requisitos
 
