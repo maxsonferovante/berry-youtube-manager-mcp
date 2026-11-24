@@ -1,5 +1,6 @@
 use crate::domain::{
-    PostRequest, SyntheticMediaRequest, UploadsRequest, VideoIdRequest, VideoRequest,
+    PostRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
+    VideoRequest,
 };
 use anyhow::Result;
 use serde_json::Value;
@@ -17,6 +18,10 @@ pub trait YouTubeGateway: Clone + Send + Sync + 'static {
     fn set_synthetic_media(
         &self,
         request: SyntheticMediaRequest,
+    ) -> impl std::future::Future<Output = Result<Value>> + Send;
+    fn set_thumbnail(
+        &self,
+        request: ThumbnailRequest,
     ) -> impl std::future::Future<Output = Result<Value>> + Send;
     fn upload_video(
         &self,
@@ -51,6 +56,10 @@ impl<T: YouTubeGateway> Publisher<T> {
         request.validate()?;
         self.youtube.set_synthetic_media(request).await
     }
+    pub async fn set_thumbnail(&self, request: ThumbnailRequest) -> Result<Value> {
+        request.validate()?;
+        self.youtube.set_thumbnail(request).await
+    }
     pub async fn video(&self, request: VideoRequest) -> Result<Value> {
         request.validate()?;
         self.youtube.upload_video(request).await
@@ -84,6 +93,10 @@ mod tests {
         async fn set_synthetic_media(&self, _: SyntheticMediaRequest) -> Result<Value> {
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(serde_json::json!({"id":"video"}))
+        }
+        async fn set_thumbnail(&self, _: ThumbnailRequest) -> Result<Value> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(serde_json::json!({"id":"thumbnail"}))
         }
         async fn upload_video(&self, _: VideoRequest) -> Result<Value> {
             self.0.fetch_add(1, Ordering::SeqCst);

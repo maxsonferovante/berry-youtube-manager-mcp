@@ -4,7 +4,7 @@
 
 [Português](README.pt-BR.md) · [Architecture](docs/architecture.md) · [Operations](docs/operations.md) · [Dependencies and licenses](docs/licenses.md) · [Contributing](CONTRIBUTING.md)
 
-Berry provides channel and video queries, video/Short uploads, video scheduling, altered-content disclosure, and immediate community posts where the API is available. It uses local stdio: your MCP client starts the server; there is no HTTP server or per-agent authentication. Local agents able to launch the server can exercise the permissions granted to its Google account.
+Berry provides channel and video queries, video/Short uploads, video scheduling, custom thumbnail updates, altered-content disclosure, and immediate community posts where the API is available. It uses local stdio: your MCP client starts the server; there is no HTTP server or per-agent authentication. Local agents able to launch the server can exercise the permissions granted to its Google account.
 
 ## Operation diagrams
 
@@ -79,6 +79,7 @@ The package is named `berry-youtube-manager-mcp`; the executable remains `youtub
 | `consultar_video` | `video_id` | Fetches video details, status and processing when available. |
 | `listar_uploads` | optional `max_results` (1–50), `page_token` | Lists one page of uploads and returns `nextPageToken`. Inspect all pages before concluding that a video is absent. |
 | `publicar_video` | absolute `file_path`, `title`, `made_for_kids`; optional `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media` | Uploads a video; the default is public. A scheduled video is private until `publish_at`; use RFC 3339 with an offset. YouTube determines whether a video is a Short. |
+| `definir_miniatura` | `video_id`, absolute JPEG or PNG `file_path` | Sets or replaces the custom thumbnail of an owned video; maximum image size is 50 MB. |
 | `declarar_conteudo_sintetico` | `video_id`, `contains_synthetic_media` | Updates the altered/synthetic media declaration while retaining known mutable status fields and using an ETag precondition. |
 | `publicar_post` | `channel_id`, optional `text`, optional `image_paths` | Publishes a public community post immediately; text or at least one image is required, with at most 10 images. The posts API is a restricted pilot and its availability depends on the Google project. |
 

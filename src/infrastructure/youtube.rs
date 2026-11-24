@@ -1,5 +1,8 @@
 use crate::{
-    domain::{PostRequest, SyntheticMediaRequest, UploadsRequest, VideoIdRequest, VideoRequest},
+    domain::{
+        PostRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
+        VideoRequest,
+    },
     infrastructure::oauth,
 };
 use anyhow::{Context, Result, bail};
@@ -70,6 +73,50 @@ impl YouTube {
             bail!("vídeo não encontrado ou sem acesso: {id}");
         }
         Ok(items.remove(0))
+    }
+
+    async fn set_thumbnail_image(&self, token: &str, id: &str, path: &str) -> Result<Value> {
+        const MAX_IMAGE_BYTES: u64 = 50 * 1024 * 1024;
+
+        let file = tokio::fs::File::open(path)
+            .await
+            .context("não foi possível abrir a imagem")?;
+        let size = file.metadata().await?.len();
+        if size == 0 || size > MAX_IMAGE_BYTES {
+            bail!("a imagem deve ter até 50 MB e não pode estar vazia");
+        }
+        let mut bytes = Vec::with_capacity(size as usize);
+        let mut file = file;
+        tokio::io::AsyncReadExt::read_to_end(&mut file, &mut bytes)
+            .await
+            .context("não foi possível ler a imagem")?;
+        if bytes.is_empty() || bytes.len() as u64 > MAX_IMAGE_BYTES {
+            bail!("a imagem deve ter até 50 MB e não pode estar vazia");
+        }
+        let content_type = thumbnail_content_type(&bytes)?;
+        let response = self
+            .http
+            .post("https://www.googleapis.com/upload/youtube/v3/thumbnails/set")
+            .query(&[("videoId", id), ("uploadType", "media")])
+            .bearer_auth(token)
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .body(bytes)
+            .send()
+            .await
+            .context(
+                "falha no envio da miniatura; confira o YouTube Studio antes de tentar novamente",
+            )?;
+        Self::json(response).await
+    }
+}
+
+fn thumbnail_content_type(bytes: &[u8]) -> Result<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Ok("image/png")
+    } else if bytes.starts_with(b"\xff\xd8\xff") {
+        Ok("image/jpeg")
+    } else {
+        bail!("formato inválido; use uma imagem JPEG ou PNG")
     }
 }
 
@@ -287,6 +334,11 @@ impl crate::application::YouTubeGateway for YouTube {
             request.contains_synthetic_media,
         )
         .await
+    }
+    async fn set_thumbnail(&self, request: ThumbnailRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.set_thumbnail_image(&token, &request.video_id, &request.file_path)
+            .await
     }
     async fn upload_video(&self, request: VideoRequest) -> Result<Value> {
         let file = tokio::fs::File::open(&request.file_path)

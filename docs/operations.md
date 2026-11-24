@@ -59,6 +59,17 @@ The upload begins a resumable session and streams the file. Automatic resume aft
 
 Reads the current status, preserves its writable fields and sends an ETag precondition with the update. Missing necessary fields, a missing ETag, or a scheduled publication less than one minute away stops the update. Verify the result and scheduling after a successful request; do not infer a negative declaration from an absent response field.
 
+### `definir_miniatura`
+
+```json
+{
+  "video_id":"VIDEO_ID_11",
+  "file_path":"/absolute/path/thumbnail.png"
+}
+```
+
+Uploads a custom thumbnail for a video accessible to the authorized channel. The path must be absolute; the image must be JPEG or PNG and no larger than 50 MB. The API response confirms the uploaded thumbnail resources. YouTube may take a short time to propagate the image to all surfaces. For Shorts, set the thumbnail after video processing has succeeded.
+
 ### `publicar_post`
 
 ```json
@@ -74,5 +85,6 @@ An optional `image_paths` array can contain up to ten absolute JPEG, PNG, GIF or
 - “Upload this local video as private, with the title I provided.”
 - “Schedule this video for the exact date and time I provided.”
 - “Mark the specified video as containing realistic altered or synthetic media.”
+- “Set this JPEG as the thumbnail for the specified video.”
 
 Write operations make real changes to the authorized channel. Verify the actual API response and status before reporting that a video or post was published or scheduled.

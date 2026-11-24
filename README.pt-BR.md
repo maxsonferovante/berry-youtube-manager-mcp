@@ -4,7 +4,7 @@
 
 [English](README.md) · [Arquitetura](docs/architecture.md) · [Operações e ferramentas](docs/operations.md) · [Dependências e licenças](docs/licenses.md) · [Contribuição](CONTRIBUTING.md)
 
-O Berry consulta canais e vídeos, envia vídeos e Shorts, agenda vídeos, declara conteúdo sintético e publica posts da comunidade quando a API estiver disponível. O cliente MCP inicia o processo local por stdio. Não há servidor HTTP nem autenticação separada por agente: agentes locais com acesso ao processo podem usar as permissões da conta autorizada.
+O Berry consulta canais e vídeos, envia vídeos e Shorts, agenda vídeos, atualiza miniaturas personalizadas, declara conteúdo sintético e publica posts da comunidade quando a API estiver disponível. O cliente MCP inicia o processo local por stdio. Não há servidor HTTP nem autenticação separada por agente: agentes locais com acesso ao processo podem usar as permissões da conta autorizada.
 
 ## Diagramas de operação
 
@@ -79,6 +79,7 @@ O pacote Cargo chama-se `berry-youtube-manager-mcp`; o executável permanece `yo
 | `consultar_video` | `video_id` | Consulta detalhes, status e processamento quando disponíveis. |
 | `listar_uploads` | `max_results` (1–50) e `page_token`, opcionais | Lista uma página de uploads e retorna `nextPageToken`. Consulte todas as páginas antes de concluir que um vídeo não existe. |
 | `publicar_video` | `file_path` absoluto, `title`, `made_for_kids`; opcionais `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media` | Envia vídeo ou Short; o padrão é público. Para agendamento, usa privacidade privada até a data RFC 3339 informada. O YouTube decide se é Short. |
+| `definir_miniatura` | `video_id`, `file_path` absoluto JPEG ou PNG | Define ou substitui a miniatura personalizada de um vídeo próprio; imagem de até 50 MB. |
 | `declarar_conteudo_sintetico` | `video_id`, `contains_synthetic_media` | Atualiza a declaração preservando os campos conhecidos do status e usando ETag. |
 | `publicar_post` | `channel_id`, `text` e `image_paths` opcionais | Publica imediatamente um post público. Exige texto ou imagem, no máximo dez imagens e acesso ao piloto da API. |
 

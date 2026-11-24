@@ -1,6 +1,9 @@
 use crate::{
     application::Publisher,
-    domain::{PostRequest, SyntheticMediaRequest, UploadsRequest, VideoIdRequest, VideoRequest},
+    domain::{
+        PostRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
+        VideoRequest,
+    },
     infrastructure::youtube::YouTube,
 };
 use rmcp::{
@@ -63,6 +66,15 @@ impl Server {
         Parameters(request): Parameters<SyntheticMediaRequest>,
     ) -> CallToolResult {
         result(self.publisher.set_synthetic_media(request).await)
+    }
+    #[tool(
+        description = "Define ou substitui a miniatura personalizada de um vídeo próprio usando uma imagem JPEG ou PNG local de até 50 MB. Altera o vídeo no YouTube."
+    )]
+    async fn definir_miniatura(
+        &self,
+        Parameters(request): Parameters<ThumbnailRequest>,
+    ) -> CallToolResult {
+        result(self.publisher.set_thumbnail(request).await)
     }
     #[tool(
         description = "Envia um vídeo ou Short ao YouTube; o YouTube decide se é Short. Por padrão é público. Pode agendar com publish_at; vídeos agendados ficam privados até a publicação."

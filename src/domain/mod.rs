@@ -79,6 +79,23 @@ impl VideoIdRequest {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct ThumbnailRequest {
+    /// ID do vídeo próprio no YouTube.
+    pub video_id: String,
+    /// Caminho absoluto da imagem JPEG ou PNG local.
+    pub file_path: String,
+}
+impl ThumbnailRequest {
+    pub fn validate(&self) -> Result<()> {
+        validate_video_id(&self.video_id)?;
+        if !std::path::Path::new(&self.file_path).is_absolute() {
+            bail!("file_path deve ser absoluto");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct SyntheticMediaRequest {
     /// ID do vídeo do canal autenticado.
     pub video_id: String,
