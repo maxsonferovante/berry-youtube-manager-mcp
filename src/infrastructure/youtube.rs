@@ -1,13 +1,18 @@
 use crate::{
     domain::{
-        PostRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
-        VideoRequest,
+        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, PostRequest,
+        RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest,
+        ReportsListRequest, StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest,
+        UploadsRequest, VideoIdRequest, VideoRequest,
     },
     infrastructure::oauth,
 };
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use tokio_util::io::ReaderStream;
+
+mod extended;
+use extended::{CaptionApi, attach_uploaded_captions, prepare_captions};
 
 #[derive(Clone)]
 pub struct YouTube {
@@ -129,6 +134,20 @@ fn video_metadata(request: &VideoRequest) -> Value {
         status["publishAt"] = json!(date);
     }
     json!({"snippet": {"title": request.title, "description": request.description.as_deref().unwrap_or_default(), "categoryId": request.category_id.as_deref().unwrap_or("10"), "tags": request.tags.as_deref().unwrap_or_default()}, "status":status})
+}
+
+fn post_body(channel_id: &str, text: Option<&str>, images: Vec<Value>) -> (&'static str, Value) {
+    let mut body = json!({"snippet": {"channelId": channel_id}});
+    if let Some(text) = text.filter(|text| !text.trim().is_empty()) {
+        body["snippet"]["textDisplay"] = json!(text);
+    }
+    let part = if images.is_empty() {
+        "snippet,id,status"
+    } else {
+        body["attachments"] = json!({"imageAttachments": images});
+        "snippet,attachments,id,status"
+    };
+    (part, body)
 }
 
 // A porta isolada permite testar leitura, preservação e escrita sem tocar no YouTube.
@@ -340,7 +359,7 @@ impl crate::application::YouTubeGateway for YouTube {
         self.set_thumbnail_image(&token, &request.video_id, &request.file_path)
             .await
     }
-    async fn upload_video(&self, request: VideoRequest) -> Result<Value> {
+    async fn upload_video(&self, mut request: VideoRequest) -> Result<Value> {
         let file = tokio::fs::File::open(&request.file_path)
             .await
             .context("não foi possível abrir o vídeo")?;
@@ -348,6 +367,8 @@ impl crate::application::YouTubeGateway for YouTube {
         if size == 0 {
             bail!("o vídeo está vazio");
         }
+        // Leia as legendas antes de criar o vídeo, para detectar arquivos ausentes antecipadamente.
+        let captions = prepare_captions(request.captions.take().unwrap_or_default()).await?;
         let token = oauth::access_token().await?;
         let metadata = video_metadata(&request);
         let init = self
@@ -372,11 +393,12 @@ impl crate::application::YouTubeGateway for YouTube {
         if url.scheme() != "https" || url.host_str() != Some("www.googleapis.com") {
             bail!("endereço de upload inesperado");
         }
-        let response = self.http.put(url).bearer_auth(token).header(reqwest::header::CONTENT_TYPE, "video/*").header(reqwest::header::CONTENT_LENGTH, size).body(reqwest::Body::wrap_stream(ReaderStream::new(file))).send().await.context("falha no envio; confira o YouTube Studio antes de tentar novamente, pois o resultado pode ser incerto")?;
+        let response = self.http.put(url).bearer_auth(&token).header(reqwest::header::CONTENT_TYPE, "video/*").header(reqwest::header::CONTENT_LENGTH, size).body(reqwest::Body::wrap_stream(ReaderStream::new(file))).send().await.context("falha no envio; confira o YouTube Studio antes de tentar novamente, pois o resultado pode ser incerto")?;
         if response.status().as_u16() == 308 {
             bail!("upload incompleto; confira o YouTube Studio antes de tentar novamente");
         }
         let mut uploaded = Self::json(response).await?;
+        attach_uploaded_captions(self, &token, &mut uploaded, captions).await;
         if let Some(object) = uploaded.as_object_mut() {
             object.insert("mcp_pendencias".into(), json!({
                 "video_relacionado": "A API Data v3 não documenta a associação de vídeo relacionado de Short; configure no YouTube Studio."
@@ -413,15 +435,56 @@ impl crate::application::YouTubeGateway for YouTube {
                 .context("YouTube não retornou token da imagem")?;
             images.push(json!({"uploadToken": image_token}));
         }
-        let mut body = json!({"snippet": {"channelId": request.channel_id, "textDisplay":request.text.unwrap_or_default()}});
-        let part = if images.is_empty() {
-            "snippet,id,status"
-        } else {
-            body["attachments"] = json!({"imageAttachments": images});
-            "snippet,attachments,id,status"
-        };
+        let (part, body) = post_body(&request.channel_id, request.text.as_deref(), images);
         let response = self.http.post("https://www.googleapis.com/youtube/v3/posts").query(&[("part", part)]).bearer_auth(token).json(&body).send().await.context("falha ao publicar; confira o YouTube antes de tentar novamente, pois o resultado pode ser incerto")?;
         Self::json(response).await
+    }
+    async fn upload_caption(&self, request: CaptionRequest) -> Result<Value> {
+        let caption = prepare_captions(vec![request.caption]).await?.remove(0);
+        let token = oauth::access_token().await?;
+        self.send_caption(&token, &request.video_id, &caption).await
+    }
+    async fn statistics(&self, request: StatisticsRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.statistics_with_token(&token, &request).await
+    }
+    async fn analytics(&self, request: AnalyticsRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.analytics_with_token(&token, &request).await
+    }
+    async fn comments(&self, request: CommentsRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.comments_with_token(&token, &request).await
+    }
+    async fn replies(&self, request: RepliesRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.replies_with_token(&token, &request).await
+    }
+    async fn reply(&self, request: ReplyRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.reply_with_token(&token, &request).await
+    }
+    async fn report_types(&self, request: ReportingListRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.reporting_list_with_token(&token, "reportTypes", &request)
+            .await
+    }
+    async fn reporting_jobs(&self, request: ReportingListRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.reporting_list_with_token(&token, "jobs", &request)
+            .await
+    }
+    async fn create_reporting_job(&self, request: ReportingJobRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.create_reporting_job_with_token(&token, &request).await
+    }
+    async fn reports(&self, request: ReportsListRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.reports_with_token(&token, &request).await
+    }
+    async fn download_report(&self, request: DownloadReportRequest) -> Result<Value> {
+        let token = oauth::access_token().await?;
+        self.download_report_with_token(&token, &request).await
     }
 }
 
@@ -458,6 +521,7 @@ mod tests {
             tags: None,
             made_for_kids: false,
             contains_synthetic_media: value,
+            captions: None,
         }
     }
     #[test]
@@ -474,6 +538,21 @@ mod tests {
             video_metadata(&sample_request(None))["status"]
                 .get("containsSyntheticMedia")
                 .is_none()
+        );
+    }
+    #[test]
+    fn post_payload_supports_text_and_image_only() {
+        let (part, text) = post_body("UC123", Some("Olá!"), vec![]);
+        assert_eq!(part, "snippet,id,status");
+        assert_eq!(
+            text,
+            json!({"snippet":{"channelId":"UC123", "textDisplay":"Olá!"}})
+        );
+        let (part, image) = post_body("UC123", None, vec![json!({"uploadToken":"image-token"})]);
+        assert_eq!(part, "snippet,attachments,id,status");
+        assert_eq!(
+            image,
+            json!({"snippet":{"channelId":"UC123"}, "attachments":{"imageAttachments":[{"uploadToken":"image-token"}]}})
         );
     }
     #[tokio::test]

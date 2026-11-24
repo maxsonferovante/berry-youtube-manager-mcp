@@ -4,7 +4,7 @@
 
 [English](README.md) · [Arquitetura](docs/architecture.md) · [Operações e ferramentas](docs/operations.md) · [Dependências e licenças](docs/licenses.md) · [Contribuição](CONTRIBUTING.md)
 
-O Berry consulta canais e vídeos, envia vídeos e Shorts, agenda vídeos, atualiza miniaturas personalizadas, declara conteúdo sintético e publica posts da comunidade quando a API estiver disponível. O cliente MCP inicia o processo local por stdio. Não há servidor HTTP nem autenticação separada por agente: agentes locais com acesso ao processo podem usar as permissões da conta autorizada.
+O Berry consulta canais e vídeos, envia vídeos e Shorts com legendas, acessa estatísticas e relatórios, gerencia comentários, gera links de compartilhamento e publica posts da comunidade quando a API estiver disponível. O cliente MCP inicia o processo local por stdio. Não há servidor HTTP nem autenticação separada por agente: agentes locais com acesso ao processo podem usar as permissões da conta autorizada.
 
 ## Diagramas de operação
 
@@ -25,14 +25,14 @@ Os SVGs são exportações animadas e independentes dos diagramas feitos no Arch
 ## Requisitos
 
 - Rust e Cargo com suporte à edição 2024. O projeto foi testado com Rust 1.95; a versão mínima ainda não foi estabelecida.
-- Projeto Google Cloud com YouTube Data API v3 habilitada e um cliente OAuth do tipo **aplicativo para computador**.
+- Projeto Google Cloud com YouTube Data API v3, YouTube Analytics API e YouTube Reporting API habilitadas e um cliente OAuth do tipo **aplicativo para computador**.
 - Conta Google com acesso ao canal, navegador e rede para as APIs do Google.
 - Cliente MCP com suporte a servidores locais stdio.
 
 ## Instalação e autorização
 
 1. Clone sua cópia do repositório e entre na pasta.
-2. Habilite a YouTube Data API v3 no Google Cloud. Configure a tela de consentimento e crie um cliente OAuth de aplicativo para computador. Se o aplicativo estiver em teste, adicione sua conta como testadora.
+2. Habilite as APIs YouTube Data v3, YouTube Analytics e YouTube Reporting no Google Cloud. Configure a tela de consentimento e crie um cliente OAuth de aplicativo para computador. Se o aplicativo estiver em teste, adicione sua conta como testadora.
 3. Baixe o JSON do seu cliente fora do repositório e informe o caminho:
 
    ```sh
@@ -78,16 +78,23 @@ O pacote Cargo chama-se `berry-youtube-manager-mcp`; o executável permanece `yo
 | `canal` | nenhuma | Consulta o canal autorizado. |
 | `consultar_video` | `video_id` | Consulta detalhes, status e processamento quando disponíveis. |
 | `listar_uploads` | `max_results` (1–50) e `page_token`, opcionais | Lista uma página de uploads e retorna `nextPageToken`. Consulte todas as páginas antes de concluir que um vídeo não existe. |
-| `publicar_video` | `file_path` absoluto, `title`, `made_for_kids`; opcionais `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media` | Envia vídeo ou Short; o padrão é público. Para agendamento, usa privacidade privada até a data RFC 3339 informada. O YouTube decide se é Short. |
+| `publicar_video` | `file_path` absoluto, `title`, `made_for_kids`; opcionais `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media`, `captions` | Envia vídeo ou Short; o padrão é público. Para agendamento, usa privacidade privada até a data RFC 3339 informada. O YouTube decide se é Short. |
 | `definir_miniatura` | `video_id`, `file_path` absoluto JPEG ou PNG | Define ou substitui a miniatura personalizada de um vídeo próprio; imagem de até 50 MB. |
 | `declarar_conteudo_sintetico` | `video_id`, `contains_synthetic_media` | Atualiza a declaração preservando os campos conhecidos do status e usando ETag. |
 | `publicar_post` | `channel_id`, `text` e `image_paths` opcionais | Publica imediatamente um post público. Exige texto ou imagem, no máximo dez imagens e acesso ao piloto da API. |
+| `anexar_legenda` | `video_id`, `caption` | Anexa uma faixa de legenda a um vídeo existente, inclusive após falha no upload de uma faixa. |
+| `obter_estatisticas` | `resource`, `ids` | Retorna dados brutos de vídeos, canais, playlists ou posts; posts exigem acesso ao piloto. |
+| `consultar_analytics` | `start_date`, `end_date`, `metrics` e filtros opcionais | Consulta relatórios brutos com métricas, dimensões, filtros e paginação suportados pelo YouTube. |
+| `listar_tipos_relatorios`, `listar_jobs_relatorios` | paginação e filtros opcionais | Lista tipos e jobs de relatórios em massa. |
+| `criar_job_relatorio`, `listar_relatorios`, `baixar_relatorio` | tipo de relatório/job, filtros e caminho do CSV | Cria job, lista relatórios gerados e baixa o CSV bruto sem sobrescrever arquivos. |
+| `listar_comentarios`, `listar_respostas`, `responder_comentario` | IDs, paginação ou texto da resposta | Lê comentários e respostas de vídeos e publica respostas. |
+| `obter_link_compartilhamento` | `resource`, `id` | Gera links de vídeo, Short ou playlist sem consultar a API. |
 
 Omitir `contains_synthetic_media` é diferente de informar `false`. Veja exemplos e limitações em [operações](docs/operations.md).
 
 ## Autorização e dados
 
-O fluxo OAuth para computador usa PKCE e solicita `youtube.force-ssl`. O Google descreve esse escopo como amplo; as ferramentas expostas pelo Berry são um subconjunto das ações permitidas. O token de renovação fica local e tem permissões restritas no Unix. Não compartilhe nem envie ao GitHub os arquivos de credenciais. O acesso aos posts depende também da disponibilidade da API para o projeto Google.
+O fluxo OAuth para computador usa PKCE e solicita `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly` e `yt-analytics-monetary.readonly` (inclui acesso aos relatórios financeiros disponíveis). Após atualizar uma instalação existente, execute novamente `youtube-mcp authorize` para conceder os novos escopos e reinicie o cliente MCP. O Google descreve esse escopo como amplo; as ferramentas expostas pelo Berry são um subconjunto das ações permitidas. O token de renovação fica local e tem permissões restritas no Unix. Não compartilhe nem envie ao GitHub os arquivos de credenciais. O acesso aos posts depende também da disponibilidade da API para o projeto Google.
 
 ## Desenvolvimento
 
