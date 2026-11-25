@@ -4,7 +4,7 @@
 
 [Português](README.pt-BR.md) · [Architecture](docs/architecture.md) · [Operations](docs/operations.md) · [Dependencies and licenses](docs/licenses.md) · [Contributing](CONTRIBUTING.md)
 
-Berry provides channel and video queries, video/Short uploads, video scheduling, custom thumbnail updates, altered-content disclosure, and immediate community posts where the API is available. It uses local stdio: your MCP client starts the server; there is no HTTP server or per-agent authentication. Local agents able to launch the server can exercise the permissions granted to its Google account.
+Berry provides channel and video queries, video/Short uploads with captions, statistics and reports, comment management, share links, and immediate community posts where the API is available. It uses local stdio: your MCP client starts the server; there is no HTTP server or per-agent authentication. Local agents able to launch the server can exercise the permissions granted to its Google account.
 
 ## Operation diagrams
 
@@ -25,14 +25,14 @@ The SVGs are standalone animated exports of the Archify diagrams. GitHub may dis
 ## Requirements
 
 - Rust and Cargo with edition 2024 support. The project is tested locally with Rust 1.95; the minimum supported version has not been established.
-- A Google Cloud project with YouTube Data API v3 enabled and an OAuth **Desktop app** client JSON.
+- A Google Cloud project with YouTube Data API v3, YouTube Analytics API, and YouTube Reporting API enabled and an OAuth **Desktop app** client JSON.
 - A Google account with access to the intended channel, a browser, and network access to Google APIs.
 - An MCP client supporting local stdio servers, such as Codex or Claude Desktop.
 
 ## Getting started
 
 1. Clone your copy of this repository and enter its directory.
-2. Enable YouTube Data API v3 in Google Cloud. Configure the OAuth consent screen and create a **Desktop app** OAuth client. When the application is in testing mode, add your account as a test user.
+2. Enable YouTube Data API v3, YouTube Analytics API, and YouTube Reporting API in Google Cloud. Configure the OAuth consent screen and create a **Desktop app** OAuth client. When the application is in testing mode, add your account as a test user.
 3. Download your own client JSON outside the repository, then point Berry to it:
 
    ```sh
@@ -78,16 +78,23 @@ The package is named `berry-youtube-manager-mcp`; the executable remains `youtub
 | `canal` | none | Returns the authenticated channel. |
 | `consultar_video` | `video_id` | Fetches video details, status and processing when available. |
 | `listar_uploads` | optional `max_results` (1–50), `page_token` | Lists one page of uploads and returns `nextPageToken`. Inspect all pages before concluding that a video is absent. |
-| `publicar_video` | absolute `file_path`, `title`, `made_for_kids`; optional `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media` | Uploads a video; the default is public. A scheduled video is private until `publish_at`; use RFC 3339 with an offset. YouTube determines whether a video is a Short. |
+| `publicar_video` | absolute `file_path`, `title`, `made_for_kids`; optional `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media`, `captions` | Uploads a video; the default is public. A scheduled video is private until `publish_at`; use RFC 3339 with an offset. YouTube determines whether a video is a Short. |
 | `definir_miniatura` | `video_id`, absolute JPEG or PNG `file_path` | Sets or replaces the custom thumbnail of an owned video; maximum image size is 50 MB. |
 | `declarar_conteudo_sintetico` | `video_id`, `contains_synthetic_media` | Updates the altered/synthetic media declaration while retaining known mutable status fields and using an ETag precondition. |
 | `publicar_post` | `channel_id`, optional `text`, optional `image_paths` | Publishes a public community post immediately; text or at least one image is required, with at most 10 images. The posts API is a restricted pilot and its availability depends on the Google project. |
+| `anexar_legenda` | `video_id`, `caption` | Uploads a caption track to an existing video, including retry after a failed track upload. |
+| `obter_estatisticas` | `resource`, `ids` | Returns raw video, channel, playlist or post data; post statistics require pilot access. |
+| `consultar_analytics` | `start_date`, `end_date`, `metrics`, optional filters | Returns raw YouTube Analytics reports with supported metrics, dimensions and pagination. |
+| `listar_tipos_relatorios`, `listar_jobs_relatorios` | optional pagination and filters | Lists available bulk-report types and existing jobs. |
+| `criar_job_relatorio`, `listar_relatorios`, `baixar_relatorio` | report type/job, filters and CSV path | Creates a job, lists generated reports and downloads raw CSV without overwriting existing files. |
+| `listar_comentarios`, `listar_respostas`, `responder_comentario` | IDs, pagination or reply text | Reads video comments and replies and publishes replies. |
+| `obter_link_compartilhamento` | `resource`, `id` | Constructs a video, Short or playlist URL without verifying the resource. |
 
 For video upload, an omitted `contains_synthetic_media` is different from `false`. An omitted privacy defaults to `public`, except when `publish_at` is supplied, when it defaults to `private`. See [operation details](docs/operations.md) for examples and limitations.
 
 ## Authorization and data
 
-The Desktop OAuth flow uses PKCE and requests `youtube.force-ssl`. Google describes this scope as allowing broad access to channel content; the exposed Berry tools are a smaller set. The refresh credential is saved locally with restrictive permissions on Unix and is read by `google-cloud-auth` to obtain access tokens. Keep the client JSON and token file private; do not commit them. Access to community posts also requires the relevant API capability, independently of OAuth consent.
+The Desktop OAuth flow uses PKCE and requests `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly`, and `yt-analytics-monetary.readonly` (including access to available financial reports). After upgrading an existing installation, run `youtube-mcp authorize` again to grant the additional scopes, then restart the MCP client. Google describes this scope as allowing broad access to channel content; the exposed Berry tools are a smaller set. The refresh credential is saved locally with restrictive permissions on Unix and is read by `google-cloud-auth` to obtain access tokens. Keep the client JSON and token file private; do not commit them. Access to community posts also requires the relevant API capability, independently of OAuth consent.
 
 ## Development
 

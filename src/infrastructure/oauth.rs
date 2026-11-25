@@ -9,7 +9,12 @@ use tokio::{
     net::TcpListener,
 };
 
-const SCOPE: &str = "https://www.googleapis.com/auth/youtube.force-ssl";
+const SCOPES: &str = concat!(
+    "https://www.googleapis.com/auth/youtube.force-ssl ",
+    "https://www.googleapis.com/auth/youtube.readonly ",
+    "https://www.googleapis.com/auth/yt-analytics.readonly ",
+    "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"
+);
 #[derive(Deserialize)]
 struct CredentialFile {
     installed: Installed,
@@ -71,7 +76,7 @@ pub async fn authorize() -> Result<()> {
         .append_pair("client_id", &secret.installed.client_id)
         .append_pair("redirect_uri", &redirect)
         .append_pair("response_type", "code")
-        .append_pair("scope", SCOPE)
+        .append_pair("scope", SCOPES)
         .append_pair("access_type", "offline")
         .append_pair("prompt", "consent")
         .append_pair("state", &state)
