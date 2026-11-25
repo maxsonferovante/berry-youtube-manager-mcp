@@ -73,14 +73,6 @@ Reads the current status, preserves its writable fields and sends an ETag precon
 
 Uploads a custom thumbnail for a video accessible to the authorized channel. The path must be absolute; the image must be JPEG or PNG and no larger than 50 MB. The API response confirms the uploaded thumbnail resources. YouTube may take a short time to propagate the image to all surfaces. For Shorts, set the thumbnail after video processing has succeeded.
 
-### `publicar_post`
-
-```json
-{"channel_id":"CHANNEL_ID","text":"Hello, community!"}
-```
-
-An optional `image_paths` array can contain up to ten absolute JPEG, PNG, GIF or WebP paths; text or at least one image is required. A successful call publishes immediately and publicly. The API is a [restricted pilot](https://developers.google.com/youtube/data/reference/rest/v3/posts/insert), and OAuth approval alone does not guarantee access. It does not support scheduling posts. A YouTube-related-video link for a Short is not exposed here; follow the [Studio instructions](https://support.google.com/youtube/answer/14075157).
-
 ## Captions
 
 ### `anexar_legenda`
@@ -99,7 +91,7 @@ Uploads a timestamped subtitle track to an existing video. Files must be readabl
 {"resource":"video","ids":["VIDEO_ID_11"]}
 ```
 
-`resource` may be `video`, `channel`, `playlist`, or `post`; provide 1–50 IDs, except that `channel` may omit `ids` to request the authorized channel. The response is the unchanged Data API JSON. Video and channel results include their available `statistics`; playlists expose `contentDetails.itemCount` rather than a Data API statistics resource. Post statistics are subject to the same restricted pilot as community posts. Counts reflect what the API and account permissions make available.
+`resource` may be `video`, `channel`, or `playlist`; provide 1–50 IDs, except that `channel` may omit `ids` to request the authorized channel. The response is the unchanged Data API JSON. Video and channel results include their available `statistics`; playlists expose `contentDetails.itemCount` rather than a Data API statistics resource. Counts reflect what the API and account permissions make available.
 
 ### `consultar_analytics`
 

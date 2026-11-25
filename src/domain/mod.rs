@@ -123,12 +123,11 @@ pub enum StatisticsResource {
     Video,
     Channel,
     Playlist,
-    Post,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct StatisticsRequest {
-    /// Tipo do recurso: video, channel, playlist ou post (piloto).
+    /// Tipo do recurso: video, channel ou playlist.
     pub resource: StatisticsResource,
     /// Até 50 IDs. Em channel, omita para consultar o canal autenticado.
     pub ids: Option<Vec<String>>,
@@ -450,37 +449,6 @@ impl UploadsRequest {
     }
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PostRequest {
-    /// ID do canal autenticado.
-    pub channel_id: String,
-    /// Texto da postagem; opcional se houver imagem.
-    pub text: Option<String>,
-    /// Até 10 caminhos absolutos de imagens JPEG, PNG, GIF ou WebP.
-    pub image_paths: Option<Vec<String>>,
-}
-impl PostRequest {
-    pub fn validate(&self) -> Result<()> {
-        if self.channel_id.trim().is_empty() {
-            bail!("channel_id é obrigatório");
-        }
-        let images = self.image_paths.as_deref().unwrap_or_default();
-        if images.len() > 10 {
-            bail!("máximo de 10 imagens");
-        }
-        if images
-            .iter()
-            .any(|p| !std::path::Path::new(p).is_absolute())
-        {
-            bail!("os caminhos das imagens devem ser absolutos");
-        }
-        if images.is_empty() && self.text.as_deref().unwrap_or("").trim().is_empty() {
-            bail!("informe texto ou imagem");
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,20 +493,6 @@ mod tests {
         v.publish_at = Some("2026-12-01T22:00:00Z".into());
         assert!(v.validate().is_ok());
         assert_eq!(v.effective_privacy(), "private");
-    }
-
-    #[test]
-    fn post_requires_content_and_absolute_paths() {
-        let mut p = PostRequest {
-            channel_id: "UC123".into(),
-            text: None,
-            image_paths: None,
-        };
-        assert!(p.validate().is_err());
-        p.image_paths = Some(vec!["relative.png".into()]);
-        assert!(p.validate().is_err());
-        p.image_paths = Some(vec!["/tmp/image.png".into()]);
-        assert!(p.validate().is_ok());
     }
 
     #[test]

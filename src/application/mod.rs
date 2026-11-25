@@ -1,5 +1,5 @@
 use crate::domain::{
-    AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, PostRequest,
+    AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest,
     RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest, ReportsListRequest,
     ShareRequest, StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest,
     VideoIdRequest, VideoRequest,
@@ -28,10 +28,6 @@ pub trait YouTubeGateway: Clone + Send + Sync + 'static {
     fn upload_video(
         &self,
         request: VideoRequest,
-    ) -> impl std::future::Future<Output = Result<Value>> + Send;
-    fn publish_post(
-        &self,
-        request: PostRequest,
     ) -> impl std::future::Future<Output = Result<Value>> + Send;
     fn upload_caption(
         &self,
@@ -109,10 +105,6 @@ impl<T: YouTubeGateway> Publisher<T> {
     pub async fn video(&self, request: VideoRequest) -> Result<Value> {
         request.validate()?;
         self.youtube.upload_video(request).await
-    }
-    pub async fn post(&self, request: PostRequest) -> Result<Value> {
-        request.validate()?;
-        self.youtube.publish_post(request).await
     }
     pub async fn caption(&self, request: CaptionRequest) -> Result<Value> {
         request.validate()?;
@@ -196,10 +188,6 @@ mod tests {
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(serde_json::json!({"id":"video"}))
         }
-        async fn publish_post(&self, _: PostRequest) -> Result<Value> {
-            self.0.fetch_add(1, Ordering::SeqCst);
-            Ok(serde_json::json!({"id":"post"}))
-        }
         async fn upload_caption(&self, _: CaptionRequest) -> Result<Value> {
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(serde_json::json!({"id":"caption"}))
@@ -259,22 +247,6 @@ mod tests {
         assert!(publisher.video(video).await.is_err());
         assert_eq!(fake.0.load(Ordering::SeqCst), 0);
     }
-    #[tokio::test]
-    async fn valid_post_reaches_gateway() {
-        let fake = FakeGateway::default();
-        let publisher = Publisher::new(fake.clone());
-        let post = PostRequest {
-            channel_id: "UC123".into(),
-            text: Some("Olá".into()),
-            image_paths: None,
-        };
-        assert_eq!(
-            publisher.post(post).await.expect("valid post")["id"],
-            "post"
-        );
-        assert_eq!(fake.0.load(Ordering::SeqCst), 1);
-    }
-
     #[tokio::test]
     async fn invalid_reply_does_not_reach_gateway_and_valid_reply_does() {
         let fake = FakeGateway::default();

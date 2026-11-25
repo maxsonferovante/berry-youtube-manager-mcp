@@ -4,7 +4,7 @@
 
 [English](README.md) · [Arquitetura](docs/architecture.md) · [Operações e ferramentas](docs/operations.md) · [Dependências e licenças](docs/licenses.md) · [Contribuição](CONTRIBUTING.md)
 
-O Berry consulta canais e vídeos, envia vídeos e Shorts com legendas, acessa estatísticas e relatórios, gerencia comentários, gera links de compartilhamento e publica posts da comunidade quando a API estiver disponível. O cliente MCP inicia o processo local por stdio. Não há servidor HTTP nem autenticação separada por agente: agentes locais com acesso ao processo podem usar as permissões da conta autorizada.
+O Berry consulta canais e vídeos, envia vídeos e Shorts com legendas, acessa estatísticas e relatórios, gerencia comentários e gera links de compartilhamento. O cliente MCP inicia o processo local por stdio. Não há servidor HTTP nem autenticação separada por agente: agentes locais com acesso ao processo podem usar as permissões da conta autorizada.
 
 ## Diagramas de operação
 
@@ -81,9 +81,8 @@ O pacote Cargo chama-se `berry-youtube-manager-mcp`; o executável permanece `yo
 | `publicar_video` | `file_path` absoluto, `title`, `made_for_kids`; opcionais `description`, `privacy`, `publish_at`, `category_id`, `tags`, `contains_synthetic_media`, `captions` | Envia vídeo ou Short; o padrão é público. Para agendamento, usa privacidade privada até a data RFC 3339 informada. O YouTube decide se é Short. |
 | `definir_miniatura` | `video_id`, `file_path` absoluto JPEG ou PNG | Define ou substitui a miniatura personalizada de um vídeo próprio; imagem de até 50 MB. |
 | `declarar_conteudo_sintetico` | `video_id`, `contains_synthetic_media` | Atualiza a declaração preservando os campos conhecidos do status e usando ETag. |
-| `publicar_post` | `channel_id`, `text` e `image_paths` opcionais | Publica imediatamente um post público. Exige texto ou imagem, no máximo dez imagens e acesso ao piloto da API. |
 | `anexar_legenda` | `video_id`, `caption` | Anexa uma faixa de legenda a um vídeo existente, inclusive após falha no upload de uma faixa. |
-| `obter_estatisticas` | `resource`, `ids` | Retorna dados brutos de vídeos, canais, playlists ou posts; posts exigem acesso ao piloto. |
+| `obter_estatisticas` | `resource`, `ids` | Retorna dados brutos de vídeos, canais ou playlists. |
 | `consultar_analytics` | `start_date`, `end_date`, `metrics` e filtros opcionais | Consulta relatórios brutos com métricas, dimensões, filtros e paginação suportados pelo YouTube. |
 | `listar_tipos_relatorios`, `listar_jobs_relatorios` | paginação e filtros opcionais | Lista tipos e jobs de relatórios em massa. |
 | `criar_job_relatorio`, `listar_relatorios`, `baixar_relatorio` | tipo de relatório/job, filtros e caminho do CSV | Cria job, lista relatórios gerados e baixa o CSV bruto sem sobrescrever arquivos. |
@@ -94,7 +93,7 @@ Omitir `contains_synthetic_media` é diferente de informar `false`. Veja exemplo
 
 ## Autorização e dados
 
-O fluxo OAuth para computador usa PKCE e solicita `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly` e `yt-analytics-monetary.readonly` (inclui acesso aos relatórios financeiros disponíveis). Após atualizar uma instalação existente, execute novamente `youtube-mcp authorize` para conceder os novos escopos e reinicie o cliente MCP. O Google descreve esse escopo como amplo; as ferramentas expostas pelo Berry são um subconjunto das ações permitidas. O token de renovação fica local e tem permissões restritas no Unix. Não compartilhe nem envie ao GitHub os arquivos de credenciais. O acesso aos posts depende também da disponibilidade da API para o projeto Google.
+O fluxo OAuth para computador usa PKCE e solicita `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly` e `yt-analytics-monetary.readonly` (inclui acesso aos relatórios financeiros disponíveis). Após atualizar uma instalação existente, execute novamente `youtube-mcp authorize` para conceder os novos escopos e reinicie o cliente MCP. O Google descreve esse escopo como amplo; as ferramentas expostas pelo Berry são um subconjunto das ações permitidas. O token de renovação fica local e tem permissões restritas no Unix. Não compartilhe nem envie ao GitHub os arquivos de credenciais.
 
 ## Desenvolvimento
 

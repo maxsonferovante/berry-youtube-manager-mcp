@@ -141,7 +141,6 @@ fn statistics_request(http: &Client, token: &str, request: &StatisticsRequest) -
         StatisticsResource::Video => ("videos", "snippet,contentDetails,statistics", "id"),
         StatisticsResource::Channel => ("channels", "snippet,contentDetails,statistics", "id"),
         StatisticsResource::Playlist => ("playlists", "snippet,contentDetails,status", "id"),
-        StatisticsResource::Post => ("posts", "snippet,statistics,status,attachments", "postId"),
     };
     let mut params = vec![("part", part.to_owned())];
     if let Some(ids) = &request.ids {
@@ -648,13 +647,6 @@ mod tests {
         assert_eq!(http.url().path(), "/youtube/v3/channels");
         assert_eq!(query(&http)["mine"], "true");
         assert!(query(&http)["part"].contains("statistics"));
-        let post = StatisticsRequest {
-            resource: StatisticsResource::Post,
-            ids: Some(vec!["post123".into()]),
-        };
-        let http = statistics_request(&Client::new(), "token", &post).unwrap();
-        assert_eq!(http.url().path(), "/youtube/v3/posts");
-        assert_eq!(query(&http)["postId"], "post123");
         let playlist = StatisticsRequest {
             resource: StatisticsResource::Playlist,
             ids: Some(vec!["PL123".into()]),

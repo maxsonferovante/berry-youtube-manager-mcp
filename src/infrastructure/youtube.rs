@@ -1,6 +1,6 @@
 use crate::{
     domain::{
-        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, PostRequest,
+        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest,
         RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest,
         ReportsListRequest, StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest,
         UploadsRequest, VideoIdRequest, VideoRequest,
@@ -134,20 +134,6 @@ fn video_metadata(request: &VideoRequest) -> Value {
         status["publishAt"] = json!(date);
     }
     json!({"snippet": {"title": request.title, "description": request.description.as_deref().unwrap_or_default(), "categoryId": request.category_id.as_deref().unwrap_or("10"), "tags": request.tags.as_deref().unwrap_or_default()}, "status":status})
-}
-
-fn post_body(channel_id: &str, text: Option<&str>, images: Vec<Value>) -> (&'static str, Value) {
-    let mut body = json!({"snippet": {"channelId": channel_id}});
-    if let Some(text) = text.filter(|text| !text.trim().is_empty()) {
-        body["snippet"]["textDisplay"] = json!(text);
-    }
-    let part = if images.is_empty() {
-        "snippet,id,status"
-    } else {
-        body["attachments"] = json!({"imageAttachments": images});
-        "snippet,attachments,id,status"
-    };
-    (part, body)
 }
 
 // A porta isolada permite testar leitura, preservação e escrita sem tocar no YouTube.
@@ -406,39 +392,6 @@ impl crate::application::YouTubeGateway for YouTube {
         }
         Ok(uploaded)
     }
-    async fn publish_post(&self, request: PostRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
-        let mut images = Vec::new();
-        for path in request.image_paths.unwrap_or_default() {
-            let bytes = tokio::fs::read(path)
-                .await
-                .context("não foi possível abrir a imagem")?;
-            if bytes.is_empty() || bytes.len() > 16_000_000 {
-                bail!("cada imagem deve ter até 16 MB e não pode estar vazia");
-            }
-            let response = self
-                .http
-                .post("https://www.googleapis.com/upload/youtube/v3/posts/image")
-                .query(&[
-                    ("channelId", &request.channel_id),
-                    ("uploadType", &"media".to_string()),
-                ])
-                .bearer_auth(&token)
-                .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
-                .body(bytes)
-                .send()
-                .await?;
-            let value = Self::json(response).await?;
-            let image_token = value
-                .get("imageUploadToken")
-                .and_then(Value::as_str)
-                .context("YouTube não retornou token da imagem")?;
-            images.push(json!({"uploadToken": image_token}));
-        }
-        let (part, body) = post_body(&request.channel_id, request.text.as_deref(), images);
-        let response = self.http.post("https://www.googleapis.com/youtube/v3/posts").query(&[("part", part)]).bearer_auth(token).json(&body).send().await.context("falha ao publicar; confira o YouTube antes de tentar novamente, pois o resultado pode ser incerto")?;
-        Self::json(response).await
-    }
     async fn upload_caption(&self, request: CaptionRequest) -> Result<Value> {
         let caption = prepare_captions(vec![request.caption]).await?.remove(0);
         let token = oauth::access_token().await?;
@@ -538,21 +491,6 @@ mod tests {
             video_metadata(&sample_request(None))["status"]
                 .get("containsSyntheticMedia")
                 .is_none()
-        );
-    }
-    #[test]
-    fn post_payload_supports_text_and_image_only() {
-        let (part, text) = post_body("UC123", Some("Olá!"), vec![]);
-        assert_eq!(part, "snippet,id,status");
-        assert_eq!(
-            text,
-            json!({"snippet":{"channelId":"UC123", "textDisplay":"Olá!"}})
-        );
-        let (part, image) = post_body("UC123", None, vec![json!({"uploadToken":"image-token"})]);
-        assert_eq!(part, "snippet,attachments,id,status");
-        assert_eq!(
-            image,
-            json!({"snippet":{"channelId":"UC123"}, "attachments":{"imageAttachments":[{"uploadToken":"image-token"}]}})
         );
     }
     #[tokio::test]

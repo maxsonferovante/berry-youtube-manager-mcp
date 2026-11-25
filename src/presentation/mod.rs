@@ -1,7 +1,7 @@
 use crate::{
     application::Publisher,
     domain::{
-        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, PostRequest,
+        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest,
         RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest,
         ReportsListRequest, ShareRequest, StatisticsRequest, SyntheticMediaRequest,
         ThumbnailRequest, UploadsRequest, VideoIdRequest, VideoRequest,
@@ -86,12 +86,6 @@ impl Server {
         Parameters(request): Parameters<VideoRequest>,
     ) -> CallToolResult {
         result(self.publisher.video(request).await)
-    }
-    #[tool(
-        description = "Publica imediatamente um post público de texto e/ou imagens. A API de posts exige acesso ao piloto do YouTube."
-    )]
-    async fn publicar_post(&self, Parameters(request): Parameters<PostRequest>) -> CallToolResult {
-        result(self.publisher.post(request).await)
     }
     #[tool(
         description = "Envia uma faixa de legenda com marcação de tempo para um vídeo existente; útil para repetir uma legenda que falhou após o upload."
