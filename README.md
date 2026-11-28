@@ -33,16 +33,11 @@ The SVGs are standalone animated exports of the Archify diagrams. GitHub may dis
 
 1. Clone your copy of this repository and enter its directory.
 2. Enable YouTube Data API v3, YouTube Analytics API, and YouTube Reporting API in Google Cloud. Configure the OAuth consent screen and create a **Desktop app** OAuth client. When the application is in testing mode, add your account as a test user.
-3. Download your own client JSON outside the repository, then point Berry to it:
+3. Build the server with `cargo build --release --locked`. Configure your MCP client with the absolute binary path and set `YOUTUBE_MCP_CLIENT_SECRET` in the server environment to the path of your Desktop OAuth client JSON.
+4. In the MCP client, call `iniciar_login`, open the link, and choose the YouTube channel in the Google consent screen. Use the browser on the same machine as Berry so it can reach the temporary listener on `127.0.0.1`.
+5. Call `status_login` after consenting. Once it returns `autorizado`, pass the returned channel ID to `selecionar_canal` and use `canal` to verify the selection. To use a saved channel in a new session, run `listar_canais_autorizados` and `selecionar_canal`.
 
-   ```sh
-   export YOUTUBE_MCP_CLIENT_SECRET="/absolute/path/to/client_secret.json"
-   cargo build --release --locked
-   ./target/release/youtube-mcp authorize
-   ```
-
-4. Open the URL printed in the terminal, choose the channel, and grant access. The browser returns to a temporary listener on `127.0.0.1`; the terminal reports whether token exchange and storage succeeded.
-5. Configure your MCP client using the absolute path to `target/release/youtube-mcp`, then restart the client. Call `canal` to confirm the selected channel before using a write tool.
+The original `youtube-mcp authorize` command still sets the session's default account. MCP logins are stored by channel ID in the sibling `authorized_user.channels` directory by default. When `YOUTUBE_MCP_TOKEN_FILE` is set, Berry replaces the file extension with `.channels` to locate that directory.
 
 The source checkout path is embedded at build time to locate `.private/authorized_user.json` by default. Set `YOUTUBE_MCP_TOKEN_FILE` to an absolute path if the binary or its build directory may move. The token-file override must be present both during `authorize` and in the MCP client's environment. `.env.example` is a reference only; Berry does not automatically load it.
 
@@ -55,18 +50,29 @@ Generic JSON configuration (use the format supported by your MCP client):
   "mcpServers": {
     "berry-youtube-manager": {
       "command": "/absolute/path/to/berry/target/release/youtube-mcp",
-      "args": []
+      "args": [],
+      "env": {
+        "YOUTUBE_MCP_CLIENT_SECRET": "/absolute/path/to/client_secret.json"
+      }
     }
   }
 }
 ```
 
-For a trusted Codex project, the equivalent project-local `.codex/config.toml` is:
+To make Berry available across Codex projects, register it in the global configuration.
+
+```sh
+codex mcp add berry-youtube-manager \
+  --env "YOUTUBE_MCP_CLIENT_SECRET=/absolute/path/to/client_secret.json" \
+  -- "/absolute/path/to/berry/target/release/youtube-mcp"
+```
+
+For a single trusted project, put the equivalent configuration in its `.codex/config.toml`.
 
 ```toml
 [mcp_servers.berry-youtube-manager]
 command = "/absolute/path/to/berry/target/release/youtube-mcp"
-# env = { YOUTUBE_MCP_TOKEN_FILE = "/absolute/path/to/authorized_user.json" }
+env = { YOUTUBE_MCP_CLIENT_SECRET = "/absolute/path/to/client_secret.json" }
 ```
 
 The package is named `berry-youtube-manager-mcp`; the executable remains `youtube-mcp`. MCP protocol messages use stdout. Repeat `cargo build --release --locked` and restart the client after changing the server.
@@ -75,6 +81,10 @@ The package is named `berry-youtube-manager-mcp`; the executable remains `youtub
 
 | Tool | Input | Behavior |
 | --- | --- | --- |
+| `iniciar_login` | none | Returns the Google consent URL. |
+| `status_login` | none | Returns the latest login status and the saved channel identity on success. |
+| `listar_canais_autorizados` | none | Lists saved channel IDs and the current session selection. |
+| `selecionar_canal` | optional `id` | Selects a saved channel for this session. Omit the ID to use the default account. |
 | `canal` | none | Returns the authenticated channel. |
 | `consultar_video` | `video_id` | Fetches video details, status and processing when available. |
 | `listar_uploads` | optional `max_results` (1–50), `page_token` | Lists one page of uploads and returns `nextPageToken`. Inspect all pages before concluding that a video is absent. |
@@ -93,7 +103,7 @@ For video upload, an omitted `contains_synthetic_media` is different from `false
 
 ## Authorization and data
 
-The Desktop OAuth flow uses PKCE and requests `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly`, and `yt-analytics-monetary.readonly` (including access to available financial reports). After upgrading an existing installation, run `youtube-mcp authorize` again to grant the additional scopes, then restart the MCP client. Google describes this scope as allowing broad access to channel content; the exposed Berry tools are a smaller set. The refresh credential is saved locally with restrictive permissions on Unix and is read by `google-cloud-auth` to obtain access tokens. Keep the client JSON and token file private; do not commit them.
+The Desktop OAuth flow uses PKCE and requests `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly`, and `yt-analytics-monetary.readonly` (including access to available financial reports). After upgrading an existing installation, authorize the channel again to grant the additional scopes. Google describes this scope as allowing broad access to channel content; the exposed Berry tools are a smaller set. The refresh credential is saved locally with restrictive permissions on Unix and is read by `google-cloud-auth` to obtain access tokens. Keep the client JSON and token file private; do not commit them.
 
 ## Development
 

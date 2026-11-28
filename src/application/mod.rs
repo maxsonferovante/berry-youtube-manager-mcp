@@ -1,8 +1,8 @@
 use crate::domain::{
-    AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest,
-    RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest, ReportsListRequest,
-    ShareRequest, StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest,
-    VideoIdRequest, VideoRequest,
+    AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, RepliesRequest,
+    ReplyRequest, ReportingJobRequest, ReportingListRequest, ReportsListRequest, ShareRequest,
+    StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
+    VideoRequest,
 };
 use anyhow::Result;
 use serde_json::Value;

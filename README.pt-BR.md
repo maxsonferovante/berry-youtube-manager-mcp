@@ -33,16 +33,11 @@ Os SVGs são exportações animadas e independentes dos diagramas feitos no Arch
 
 1. Clone sua cópia do repositório e entre na pasta.
 2. Habilite as APIs YouTube Data v3, YouTube Analytics e YouTube Reporting no Google Cloud. Configure a tela de consentimento e crie um cliente OAuth de aplicativo para computador. Se o aplicativo estiver em teste, adicione sua conta como testadora.
-3. Baixe o JSON do seu cliente fora do repositório e informe o caminho:
+3. Compile com `cargo build --release --locked`. Configure o cliente MCP com o caminho absoluto do executável e defina `YOUTUBE_MCP_CLIENT_SECRET` no ambiente do servidor com o caminho do JSON OAuth para computador.
+4. No cliente MCP, chame `iniciar_login`, abra o link e escolha o canal na tela de consentimento do Google. Use um navegador na mesma máquina do Berry para que ele alcance o receptor temporário em `127.0.0.1`.
+5. Depois de consentir, chame `status_login`. Quando retornar `autorizado`, passe o ID retornado para `selecionar_canal` e confira a seleção com `canal`. Para usar um canal salvo em outra sessão, use `listar_canais_autorizados` e `selecionar_canal`.
 
-   ```sh
-   export YOUTUBE_MCP_CLIENT_SECRET="/caminho/absoluto/client_secret.json"
-   cargo build --release --locked
-   ./target/release/youtube-mcp authorize
-   ```
-
-4. Abra a URL apresentada, escolha o canal e conceda acesso. O navegador retorna a um receptor temporário em `127.0.0.1`; confira no terminal se a troca e o armazenamento do token terminaram.
-5. Configure o cliente MCP com o caminho absoluto de `target/release/youtube-mcp`, reinicie-o e consulte `canal` para conferir a conta antes de publicar.
+O comando `youtube-mcp authorize` continua definindo a conta padrão da sessão. Os logins pelo MCP são salvos por ID em `authorized_user.channels`, ao lado do arquivo de autorização padrão. Se definir `YOUTUBE_MCP_TOKEN_FILE`, o Berry usa esse caminho com a extensão substituída por `.channels`.
 
 Por padrão, o caminho da pasta de código no momento da compilação é usado para localizar `.private/authorized_user.json`. Se mover o executável ou a pasta de compilação, defina `YOUTUBE_MCP_TOKEN_FILE` com um caminho absoluto tanto na autorização quanto no ambiente do cliente MCP. O arquivo `.env.example` é apenas referência; o servidor não o carrega automaticamente.
 
@@ -55,18 +50,29 @@ Exemplo genérico em JSON:
   "mcpServers": {
     "berry-youtube-manager": {
       "command": "/caminho/absoluto/berry/target/release/youtube-mcp",
-      "args": []
+      "args": [],
+      "env": {
+        "YOUTUBE_MCP_CLIENT_SECRET": "/caminho/absoluto/client_secret.json"
+      }
     }
   }
 }
 ```
 
-Para um projeto confiável no Codex, use `.codex/config.toml`:
+Para usar o Berry em todos os projetos do Codex, registre o servidor na configuração global.
+
+```sh
+codex mcp add berry-youtube-manager \
+  --env "YOUTUBE_MCP_CLIENT_SECRET=/caminho/absoluto/client_secret.json" \
+  -- "/caminho/absoluto/berry/target/release/youtube-mcp"
+```
+
+Para usar o Berry em um único projeto confiável, coloque a configuração equivalente no `.codex/config.toml` do projeto.
 
 ```toml
 [mcp_servers.berry-youtube-manager]
 command = "/caminho/absoluto/berry/target/release/youtube-mcp"
-# env = { YOUTUBE_MCP_TOKEN_FILE = "/caminho/absoluto/authorized_user.json" }
+env = { YOUTUBE_MCP_CLIENT_SECRET = "/caminho/absoluto/client_secret.json" }
 ```
 
 O pacote Cargo chama-se `berry-youtube-manager-mcp`; o executável permanece `youtube-mcp`. Recompile com `cargo build --release --locked` e reinicie o cliente depois de alterar o servidor.
@@ -75,6 +81,10 @@ O pacote Cargo chama-se `berry-youtube-manager-mcp`; o executável permanece `yo
 
 | Ferramenta | Entrada | Comportamento |
 | --- | --- | --- |
+| `iniciar_login` | nenhuma | Retorna o link de consentimento do Google. |
+| `status_login` | nenhuma | Consulta o login e retorna o ID e o título do canal salvo. |
+| `listar_canais_autorizados` | nenhuma | Lista os IDs salvos e a seleção da sessão. |
+| `selecionar_canal` | `id` opcional | Seleciona o canal salvo para esta sessão. Sem ID, volta à conta padrão. |
 | `canal` | nenhuma | Consulta o canal autorizado. |
 | `consultar_video` | `video_id` | Consulta detalhes, status e processamento quando disponíveis. |
 | `listar_uploads` | `max_results` (1–50) e `page_token`, opcionais | Lista uma página de uploads e retorna `nextPageToken`. Consulte todas as páginas antes de concluir que um vídeo não existe. |
@@ -93,7 +103,7 @@ Omitir `contains_synthetic_media` é diferente de informar `false`. Veja exemplo
 
 ## Autorização e dados
 
-O fluxo OAuth para computador usa PKCE e solicita `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly` e `yt-analytics-monetary.readonly` (inclui acesso aos relatórios financeiros disponíveis). Após atualizar uma instalação existente, execute novamente `youtube-mcp authorize` para conceder os novos escopos e reinicie o cliente MCP. O Google descreve esse escopo como amplo; as ferramentas expostas pelo Berry são um subconjunto das ações permitidas. O token de renovação fica local e tem permissões restritas no Unix. Não compartilhe nem envie ao GitHub os arquivos de credenciais.
+O fluxo OAuth para computador usa PKCE e solicita `youtube.force-ssl`, `youtube.readonly`, `yt-analytics.readonly` e `yt-analytics-monetary.readonly` (inclui acesso aos relatórios financeiros disponíveis). Após atualizar uma instalação existente, autorize o canal novamente para conceder os novos escopos. O Google descreve esse escopo como amplo; as ferramentas expostas pelo Berry são um subconjunto das ações permitidas. O token de renovação fica local e tem permissões restritas no Unix. Não compartilhe nem envie ao GitHub os arquivos de credenciais.
 
 ## Desenvolvimento
 

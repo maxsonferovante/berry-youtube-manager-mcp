@@ -1,14 +1,16 @@
 use crate::{
     domain::{
-        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest,
-        RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest,
-        ReportsListRequest, StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest,
-        UploadsRequest, VideoIdRequest, VideoRequest,
+        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, RepliesRequest,
+        ReplyRequest, ReportingJobRequest, ReportingListRequest, ReportsListRequest,
+        StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
+        VideoRequest,
     },
     infrastructure::oauth,
 };
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
+use std::{sync::Arc, time::Duration};
+use tokio::sync::RwLock;
 use tokio_util::io::ReaderStream;
 
 mod extended;
@@ -17,6 +19,7 @@ use extended::{CaptionApi, attach_uploaded_captions, prepare_captions};
 #[derive(Clone)]
 pub struct YouTube {
     http: reqwest::Client,
+    active_channel: Arc<RwLock<Option<String>>>,
 }
 impl YouTube {
     pub fn new() -> Result<Self> {
@@ -24,6 +27,7 @@ impl YouTube {
             http: reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
                 .build()?,
+            active_channel: Arc::default(),
         })
     }
     async fn json(response: reqwest::Response) -> Result<Value> {
@@ -42,11 +46,73 @@ impl YouTube {
     }
 }
 
+struct ChannelIdentity {
+    id: String,
+    title: String,
+}
+
 impl YouTube {
+    pub async fn active_channel(&self) -> Option<String> {
+        self.active_channel.read().await.clone()
+    }
+
+    async fn access_token(&self) -> Result<String> {
+        let path = match self.active_channel().await {
+            Some(id) => oauth::channel_path(&id)?,
+            None => oauth::token_path(),
+        };
+        oauth::access_token(&path).await
+    }
+
+    pub async fn save_login(&self, authorization: oauth::Authorization) -> Result<Value> {
+        let user = authorization.finish().await?;
+        let channel = self.channel_identity(&user.access_token).await?;
+        user.save(&oauth::channel_path(&channel.id)?).await?;
+        Ok(json!({"id": channel.id, "titulo": channel.title}))
+    }
+
+    pub async fn select_channel(&self, id: Option<String>) -> Result<Value> {
+        let path = match &id {
+            Some(id) => oauth::channel_path(id)?,
+            None => oauth::token_path(),
+        };
+        let token = oauth::access_token(&path).await?;
+        let channel = self.channel_identity(&token).await?;
+        if id.as_ref().is_some_and(|id| id != &channel.id) {
+            bail!("a credencial está associada a outro canal");
+        }
+        *self.active_channel.write().await = id;
+        Ok(json!({"id": channel.id, "titulo": channel.title}))
+    }
+
+    async fn channel_identity(&self, token: &str) -> Result<ChannelIdentity> {
+        let response = self.channel_with_token(token).await?;
+        let items = response
+            .get("items")
+            .and_then(Value::as_array)
+            .context("resposta do YouTube sem canais")?;
+        let [channel] = items.as_slice() else {
+            bail!("o Google deve autorizar um único canal do YouTube");
+        };
+        let id = channel
+            .get("id")
+            .and_then(Value::as_str)
+            .context("o YouTube não retornou o ID do canal")?;
+        let title = channel
+            .pointer("/snippet/title")
+            .and_then(Value::as_str)
+            .context("o YouTube não retornou o título do canal")?;
+        Ok(ChannelIdentity {
+            id: id.to_owned(),
+            title: title.to_owned(),
+        })
+    }
+
     async fn channel_with_token(&self, token: &str) -> Result<Value> {
         Self::json(
             self.http
                 .get("https://www.googleapis.com/youtube/v3/channels")
+                .timeout(Duration::from_secs(20))
                 .query(&[("part", "snippet,contentDetails"), ("mine", "true")])
                 .bearer_auth(token)
                 .send()
@@ -281,15 +347,15 @@ fn uploads_result(page: Value, videos: Value) -> Result<Value> {
 
 impl crate::application::YouTubeGateway for YouTube {
     async fn channel(&self) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.channel_with_token(&token).await
     }
     async fn get_video(&self, request: VideoIdRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.fetch_video(&token, &request.video_id).await
     }
     async fn list_uploads(&self, request: UploadsRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         let channel = self.channel_with_token(&token).await?;
         let playlist = channel
             .pointer("/items/0/contentDetails/relatedPlaylists/uploads")
@@ -331,7 +397,7 @@ impl crate::application::YouTubeGateway for YouTube {
         uploads_result(page, videos)
     }
     async fn set_synthetic_media(&self, request: SyntheticMediaRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         update_synthetic_media(
             self,
             &token,
@@ -341,7 +407,7 @@ impl crate::application::YouTubeGateway for YouTube {
         .await
     }
     async fn set_thumbnail(&self, request: ThumbnailRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.set_thumbnail_image(&token, &request.video_id, &request.file_path)
             .await
     }
@@ -355,7 +421,7 @@ impl crate::application::YouTubeGateway for YouTube {
         }
         // Leia as legendas antes de criar o vídeo, para detectar arquivos ausentes antecipadamente.
         let captions = prepare_captions(request.captions.take().unwrap_or_default()).await?;
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         let metadata = video_metadata(&request);
         let init = self
             .http
@@ -394,49 +460,49 @@ impl crate::application::YouTubeGateway for YouTube {
     }
     async fn upload_caption(&self, request: CaptionRequest) -> Result<Value> {
         let caption = prepare_captions(vec![request.caption]).await?.remove(0);
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.send_caption(&token, &request.video_id, &caption).await
     }
     async fn statistics(&self, request: StatisticsRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.statistics_with_token(&token, &request).await
     }
     async fn analytics(&self, request: AnalyticsRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.analytics_with_token(&token, &request).await
     }
     async fn comments(&self, request: CommentsRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.comments_with_token(&token, &request).await
     }
     async fn replies(&self, request: RepliesRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.replies_with_token(&token, &request).await
     }
     async fn reply(&self, request: ReplyRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.reply_with_token(&token, &request).await
     }
     async fn report_types(&self, request: ReportingListRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.reporting_list_with_token(&token, "reportTypes", &request)
             .await
     }
     async fn reporting_jobs(&self, request: ReportingListRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.reporting_list_with_token(&token, "jobs", &request)
             .await
     }
     async fn create_reporting_job(&self, request: ReportingJobRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.create_reporting_job_with_token(&token, &request).await
     }
     async fn reports(&self, request: ReportsListRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.reports_with_token(&token, &request).await
     }
     async fn download_report(&self, request: DownloadReportRequest) -> Result<Value> {
-        let token = oauth::access_token().await?;
+        let token = self.access_token().await?;
         self.download_report_with_token(&token, &request).await
     }
 }

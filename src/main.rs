@@ -12,8 +12,7 @@ async fn main() -> Result<()> {
     if std::env::args().nth(1).as_deref() == Some("authorize") {
         return oauth::authorize().await;
     }
-    let publisher = application::Publisher::new(YouTube::new()?);
-    presentation::Server::new(publisher)
+    presentation::Server::new(YouTube::new()?)
         .serve(rmcp::transport::stdio())
         .await?
         .waiting()

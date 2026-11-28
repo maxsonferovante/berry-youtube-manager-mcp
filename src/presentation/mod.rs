@@ -1,12 +1,12 @@
 use crate::{
     application::Publisher,
     domain::{
-        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest,
-        RepliesRequest, ReplyRequest, ReportingJobRequest, ReportingListRequest,
-        ReportsListRequest, ShareRequest, StatisticsRequest, SyntheticMediaRequest,
-        ThumbnailRequest, UploadsRequest, VideoIdRequest, VideoRequest,
+        AnalyticsRequest, CaptionRequest, CommentsRequest, DownloadReportRequest, RepliesRequest,
+        ReplyRequest, ReportingJobRequest, ReportingListRequest, ReportsListRequest, ShareRequest,
+        StatisticsRequest, SyntheticMediaRequest, ThumbnailRequest, UploadsRequest, VideoIdRequest,
+        VideoRequest,
     },
-    infrastructure::youtube::YouTube,
+    infrastructure::{oauth, youtube::YouTube},
 };
 use rmcp::{
     ServerHandler,
@@ -15,15 +15,41 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::{Value, json};
+use std::sync::Arc;
+use tokio::{sync::Mutex, task::JoinHandle};
+
+enum Login {
+    Pending {
+        url: String,
+        task: JoinHandle<anyhow::Result<Value>>,
+    },
+    Finished {
+        status: Value,
+    },
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct ChannelSelection {
+    /// ID do canal salvo. Omita para voltar à autorização padrão do terminal.
+    id: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct Server {
     publisher: Publisher<YouTube>,
+    youtube: YouTube,
+    login: Arc<Mutex<Option<Login>>>,
     tool_router: ToolRouter<Self>,
 }
 impl Server {
-    pub fn new(publisher: Publisher<YouTube>) -> Self {
+    pub fn new(youtube: YouTube) -> Self {
         Self {
-            publisher,
+            publisher: Publisher::new(youtube.clone()),
+            youtube,
+            login: Arc::default(),
             tool_router: Self::tool_router(),
         }
     }
@@ -38,6 +64,78 @@ fn result(value: anyhow::Result<serde_json::Value>) -> CallToolResult {
 }
 #[tool_router(router = tool_router)]
 impl Server {
+    #[tool(
+        description = "Fornece um link de consentimento do Google válido por cinco minutos. Mostre o link ao usuário para que ele escolha o canal no navegador e depois use status_login."
+    )]
+    async fn iniciar_login(&self) -> CallToolResult {
+        result(self.start_login().await)
+    }
+
+    async fn start_login(&self) -> anyhow::Result<Value> {
+        let mut login = self.login.lock().await;
+        if let Some(Login::Pending { url, task }) = login.as_ref()
+            && !task.is_finished()
+        {
+            return Ok(json!({"status": "aguardando", "url": url}));
+        }
+        let authorization = oauth::start().await?;
+        let url = authorization.url.to_string();
+        let youtube = self.youtube.clone();
+        let task = tokio::spawn(async move { youtube.save_login(authorization).await });
+        *login = Some(Login::Pending {
+            url: url.clone(),
+            task,
+        });
+        Ok(json!({"status": "aguardando", "url": url, "expira_em_segundos": 300}))
+    }
+
+    #[tool(
+        description = "Consulta o resultado de iniciar_login. Quando autorizado, retorna o ID e o título do canal salvo. Use selecionar_canal para passar a operar nesse canal."
+    )]
+    async fn status_login(&self) -> CallToolResult {
+        let mut login = self.login.lock().await;
+        if let Some(Login::Pending { task, .. }) = login.as_mut()
+            && task.is_finished()
+        {
+            let status = match task.await {
+                Ok(Ok(channel)) => json!({"status": "autorizado", "canal": channel}),
+                Ok(Err(error)) => json!({"status": "falhou", "erro": error.to_string()}),
+                Err(_) => {
+                    json!({"status": "falhou", "erro": "a tarefa de autorização foi interrompida"})
+                }
+            };
+            *login = Some(Login::Finished { status });
+        }
+
+        result(Ok(match login.as_ref() {
+            None => json!({"status": "nao_iniciado"}),
+            Some(Login::Pending { .. }) => json!({"status": "aguardando"}),
+            Some(Login::Finished { status }) => status.clone(),
+        }))
+    }
+
+    #[tool(
+        description = "Lista os IDs dos canais salvos pelo login MCP e indica o canal selecionado nesta sessão. Canal selecionado nulo indica uso da autorização padrão, se configurada."
+    )]
+    async fn listar_canais_autorizados(&self) -> CallToolResult {
+        let active = self.youtube.active_channel().await;
+        result(
+            oauth::saved_channels()
+                .await
+                .map(|ids| json!({"canais": ids, "canal_selecionado": active})),
+        )
+    }
+
+    #[tool(
+        description = "Seleciona um canal salvo pelo ID para as próximas operações nesta sessão MCP. Omita o ID para voltar à autorização padrão. Retorna o ID e o título confirmados pelo YouTube."
+    )]
+    async fn selecionar_canal(
+        &self,
+        Parameters(selection): Parameters<ChannelSelection>,
+    ) -> CallToolResult {
+        result(self.youtube.select_channel(selection.id).await)
+    }
+
     #[tool(description = "Consulta o canal associado à conta OAuth autorizada.")]
     async fn canal(&self) -> CallToolResult {
         result(self.publisher.channel().await)
